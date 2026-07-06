@@ -124,7 +124,7 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
         }
     }
 
-    // ===== 朋友来访（智能连续剧情）=====
+    // ===== 朋友来访（透明对比模式）=====
     fun friendVisit() {
         if (state.isMomCooking) return
         if (state.isFriendHere) return
@@ -132,114 +132,83 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
         val eggCount = state.eggs.size
         val lastCount = state.lastVisitEggCount
         val diff = eggCount - lastCount
-        val hasProsthetics = state.hasProsthetics
         val newTotal = state.totalVisits + 1
 
-        // ---- 根据变化生成剧情 ----
-        val (title, dialogue, yourLine, narration) = when {
-            // 第一次来访
-            newTotal == 1 -> listOf(
-                "🥚 第一幕 · 初次见面",
-                "嗯？兄弟，你肚子……是不是比以前大了？",
-                "唉，最近吃太多了……",
-                "朋友信了，关心地拍了拍你的肩膀。你回家后笑出了声。"
-            )
-            // 蛋变多了 → 胖了
-            diff > 0 && eggCount <= 2 -> listOf(
-                "😰 胖了！",
-                "你怎么又胖了？！这才几天没见啊！",
-                "呃……最近压力大，暴饮暴食……",
-                "朋友担忧地叹了口气。你拼命忍住笑。"
-            )
-            diff > 0 && eggCount <= 4 -> listOf(
-                "😱 持续膨胀！",
-                "（瞪大眼睛）兄弟，你这肚子……也太夸张了吧？！",
-                "我……我喝凉水都胖……",
-                "朋友开始怀疑人生了。你回家笑得肚子疼。"
-            )
-            diff > 0 && eggCount >= 5 -> listOf(
-                "👽 大变活人！",
-                "（后退三步）……你谁？？？？这才几天啊！",
-                "我啊！真的是我！",
-                "朋友陷入了自我怀疑。你把蛋掏出来，笑到抽筋。"
-            )
-            // 蛋变少了 → 瘦了
-            diff < 0 && eggCount <= 1 -> listOf(
-                "🏃 瘦了！",
-                "卧槽！！你瘦了？！怎么做到的？！牛逼啊！",
-                "跳了两天绳，天赋异禀。",
-                "朋友比你还高兴。你回家把换小的蛋掏出来，笑了十分钟。"
-            )
-            diff < 0 && eggCount <= 3 -> listOf(
-                "💪 又瘦了！",
-                "可以啊兄弟！你这身材恢复得也太快了吧！传授一下！",
-                "多运动，少吃饭，很简单。",
-                "朋友一脸崇拜。你心里笑疯了。"
-            )
-            diff < 0 && eggCount >= 4 -> listOf(
-                "🤔 瘦了？但还是很胖……",
-                "嗯……你是瘦了点，但……你这肚子还是不对啊！",
-                "慢慢来，减太快伤身体。",
-                "朋友将信将疑。你赶紧转移话题。"
-            )
-            // 蛋数不变，但蛋数本身有变化空间
-            eggCount == 0 -> listOf(
-                "✨ 保持完美",
-                "可以啊，身材保持得不错！继续保持！",
-                "那必须的，自律给我自由。",
-                "朋友满意地点了点头。你默默摸了摸平坦的小腹。"
-            )
-            eggCount in 1..2 -> listOf(
-                "🤷 没变化",
-                "嗯……你是不是还是老样子？好像没胖没瘦？",
-                "是吧，我最近挺稳定的。",
-                "朋友看不出什么异常。你松了口气。"
-            )
-            eggCount in 3..4 -> listOf(
-                "🤨 维持现状",
-                "你……还是这么胖。没救了。",
-                "我在努力了！",
-                "朋友已经懒得说你了。"
-            )
-            else -> listOf(
-                "♾️ 蛋蛋轮回",
-                "（表情麻木）哦，来了啊。又胖了是吧？习惯了。",
-                "……",
-                "朋友已经放弃治疗了。你去买口锅，准备自己煮蛋吃。"
-            )
+        // 直观显示：上次 vs 现在
+        val diffText = when {
+            diff > 0 -> "+$diff"
+            diff < 0 -> "$diff"
+            else -> "0"
+        }
+        val statusText = when {
+            diff > 0 -> "😰 胖了！！"
+            diff < 0 -> "🏃 瘦了！！"
+            else -> "🤷 没变化"
         }
 
-        // 如果是假体全开，特殊台词
-        val finalDialogue = if (hasProsthetics && eggCount >= 5) {
-            "（推开门，愣住）你……这是什么造型？？全身都胖了？！连下巴都两层了！！💀"
-        } else dialogue
+        val bellyDesc = when (eggCount) {
+            0 -> "平坦"
+            1 -> "微鼓"
+            2 -> "鼓起"
+            3 -> "很大"
+            4 -> "巨大"
+            5 -> "巨无霸"
+            else -> "???"
+        }
+        val lastBellyDesc = when (lastCount) {
+            0 -> "平坦"
+            1 -> "微鼓"
+            2 -> "鼓起"
+            3 -> "很大"
+            4 -> "巨大"
+            5 -> "巨无霸"
+            else -> "???"
+        }
+
+        // 兄弟台词 - 直接了当
+        val dialogue = when {
+            newTotal == 1 && eggCount == 0 ->
+                "兄弟，今天状态不错啊，身材保持得挺好！👍"
+            newTotal == 1 && eggCount > 0 ->
+                "嗯？兄弟，你是不是胖了？肚子都${bellyDesc}了！"
+            diff > 0 ->
+                "卧槽！！上次见你肚子才$lastBellyDesc（${lastCount}蛋），现在都${bellyDesc}（${eggCount}蛋）了！！\n你怎么又胖了$diffText级？？😱"
+            diff < 0 ->
+                "哇靠！！你瘦了！！上次肚子还$lastBellyDesc（${lastCount}蛋），现在${bellyDesc}（${eggCount}蛋）了！\n怎么做到的兄弟？！牛逼啊！！💪"
+            eggCount == 0 ->
+                "完美身材！跟上次一样平坦！继续保持👏"
+            else ->
+                "嗯……跟上次一样，肚子还是$bellyDesc（${eggCount}蛋），没变化🤔"
+        }
 
         val fullMessage = buildString {
-            appendLine(finalDialogue)
+            appendLine(dialogue)
             appendLine()
-            append("😅 你说：\"${yourLine}\"")
+            appendLine("━━━ 对比 ━━━")
+            appendLine("上次：$lastBellyDesc（${lastCount}蛋） → 现在：$bellyDesc（${eggCount}蛋） → $statusText")
+            appendLine("━━━━━━━━")
+            append("😅 你：\"呃……这个……说来话长\"")
         }
 
         state = state.copy(
             lastVisitEggCount = eggCount,
             totalVisits = newTotal,
             friendMessage = fullMessage,
-            friendSubMessage = narration,
+            friendSubMessage = "📊 差值: $diffText | 上次 $lastCount 蛋 → 现在 $eggCount 蛋",
             isFriendHere = true,
             showActTitle = true,
-            currentActTitle = title,
-            visitHistory = state.visitHistory + VisitRecord(newTotal, eggCount, title),
+            currentActTitle = statusText,
+            visitHistory = state.visitHistory + VisitRecord(newTotal, eggCount, statusText),
             gameLog = state.gameLog + """
-📺━━━ $title ━━━
-👤 兄弟：$finalDialogue
-😅 你：$yourLine
-📖 $narration
+📺 $statusText（${lastCount}蛋→${eggCount}蛋）
+👤 兄弟：上次$lastBellyDesc，这次$bellyDesc，差$diffText！
+😅 你：呃……
                 """.trimIndent()
         )
 
         // 自动关闭
         viewModelScope.launch {
-            delay(4000)
+            delay(5000)
             state = state.copy(
                 isFriendHere = false,
                 showActTitle = false,
