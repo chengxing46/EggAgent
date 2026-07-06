@@ -172,7 +172,7 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
             newTotal == 1 && eggCount > 0 ->
                 "嗯？兄弟，你是不是胖了？肚子都${bellyDesc}了！"
             diff > 0 ->
-                "卧槽！！上次见你肚子才$lastBellyDesc（${lastCount}蛋），现在都${bellyDesc}（${eggCount}蛋）了！！\n你怎么又胖了$diffText级？？😱"
+                "卧槽！！上次见你肚子才$lastBellyDesc（${lastCount}蛋），现在都${bellyDesc}（${eggCount}蛋）了！！\n你怎么又胖了${diffText}级？？😱"
             diff < 0 ->
                 "哇靠！！你瘦了！！上次肚子还$lastBellyDesc（${lastCount}蛋），现在${bellyDesc}（${eggCount}蛋）了！\n怎么做到的兄弟？！牛逼啊！！💪"
             eggCount == 0 ->
