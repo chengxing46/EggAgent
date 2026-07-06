@@ -18,7 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -45,19 +44,33 @@ enum class EggType(val emoji: String, val eggName: String, val color: Color, val
 // ========== 访问记录 ==========
 data class VisitRecord(val visitNumber: Int, val eggCount: Int, val message: String)
 
+// ========== 连续剧情事件 ==========
+data class StoryEvent(
+    val act: Int,           // 第几幕
+    val title: String,      // 幕标题
+    val dialogue: String,   // 兄弟台词
+    val yourLine: String,   // 你的回应
+    val narration: String,  // 旁白描述
+    val minEggs: Int = 0,   // 建议最少蛋数
+    val needsProsthetics: Boolean = false  // 是否需要假体
+)
+
 // ========== 游戏状态 ==========
 data class GameState(
     val eggs: List<EggType> = emptyList(),
     val hasProsthetics: Boolean = false,      // 是否解锁假体
-    val visitCount: Int = 0,                   // 朋友来访次数
-    val friendMessage: String = "点击「朋友来访」看看反应！",
+    val storyStage: Int = 0,                   // 当前剧情进度（0-6）
+    val friendMessage: String = "点击「朋友来访」继续追剧！",
+    val friendSubMessage: String = "",
     val friendName: String = "\uD83D\uDC64 兄弟",
     val visitHistory: List<VisitRecord> = emptyList(),
-    val gameLog: List<String> = listOf("🎮 蛋蛋特工启动！"),
+    val gameLog: List<String> = listOf("🎮 蛋蛋特工启动！📺 兄弟连续剧即将开播……"),
     val isMomCooking: Boolean = false,         // 被老妈煮蛋了？
     val isFriendHere: Boolean = false,         // 朋友正在对话？
     val showEggAnimation: Boolean = false,
-    val eggAnimationType: EggType? = null
+    val eggAnimationType: EggType? = null,
+    val showActTitle: Boolean = false,
+    val currentActTitle: String = ""
 )
 
 // ========== ViewModel ==========
@@ -124,53 +137,104 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
         }
     }
 
-    // ===== 朋友来访 =====
+    // ========== 连续剧情 ==========
+    private val storyEvents = listOf(
+        StoryEvent(
+            act = 1, title = "🥚 第一幕 · 黑蛋首秀",
+            dialogue = "嗯？兄弟，你咋胖了这么多？肚子鼓起来好大一块！",
+            yourLine = "唉，最近吃太多了，控制不住嘴……",
+            narration = "朋友信了。他脸上全是关心。你回家把蛋掏出来，笑到打滚。",
+            minEggs = 1
+        ),
+        StoryEvent(
+            act = 2, title = "🏃 第二幕 · 瘦了",
+            dialogue = "卧槽！你瘦了？！两天不见怎么瘦这么多？！牛逼啊你！",
+            yourLine = "跳了两天绳，天赋异禀。",
+            narration = "朋友信了。他比你还高兴。你回家，把换小的蛋掏出来，笑了十分钟。",
+            minEggs = 0
+        ),
+        StoryEvent(
+            act = 3, title = "😰 第三幕 · 反弹",
+            dialogue = "……你怎么又胖了？？反弹能弹这么多的吗？！",
+            yourLine = "唉，断了几天没跳，易胖体质，没办法……",
+            narration = "朋友信了。他以为你真的很苦恼。你回家，把蛋掏出来，又笑了半天。",
+            minEggs = 2
+        ),
+        StoryEvent(
+            act = 4, title = "😱 第四幕 · 持续膨胀",
+            dialogue = "你怎么又胖了？！兄弟，你去看看医生吧！这不对啊！！",
+            yourLine = "看了，医生说是代谢问题……没事，我继续跳绳。",
+            narration = "朋友信了。他开始为你担心了。你回家，把蛋掏出来，笑得肚子疼。",
+            minEggs = 3
+        ),
+        StoryEvent(
+            act = 5, title = "👽 第五幕 · 全面升级",
+            dialogue = "（推开门，退了一步）……你谁？？？？",
+            yourLine = "我啊！",
+            narration = "朋友上下打量了你足足十秒，陷入了自我怀疑……",
+            minEggs = 4
+        ),
+        StoryEvent(
+            act = 6, title = "🤖 第六幕 · 最终形态",
+            dialogue = "（沉默了十秒）……兄弟，你是吃了化肥吗？你已经……不像人了。",
+            yourLine = "最近压力大，暴饮暴食……",
+            narration = "朋友开始怀疑人生。你回家，五颗蛋加全套假体全部掏出来，在床上笑到抽筋。",
+            minEggs = 5,
+            needsProsthetics = true
+        ),
+        StoryEvent(
+            act = 7, title = "♾️ 第七幕 · 蛋蛋轮回",
+            dialogue = "（麻木地看了你一眼）哦，又胖了。随你吧……我去买口锅。",
+            yourLine = "买锅干啥？",
+            narration = "朋友：『给你妈做饭用，反正你迟早要露馅。』",
+            minEggs = 0
+        )
+    )
+
+    // ===== 朋友来访（连续剧模式）=====
     fun friendVisit() {
         if (state.isMomCooking) return
         if (state.isFriendHere) return
 
+        val currentStage = state.storyStage
+        val event = storyEvents[currentStage % storyEvents.size]
         val eggCount = state.eggs.size
-        val hasProsthetics = state.hasProsthetics
-        val newVisitCount = state.visitCount + 1
-        val totalSize = eggCount + (if (hasProsthetics) 3 else 0)
+        val newStage = currentStage + 1
 
-        val message = when {
-            state.eggs.isEmpty() && !hasProsthetics ->
-                "兄弟，你今天状态不错啊，身材保持得挺好！👍"
-            state.eggs.size == 1 ->
-                "嗯？你是不是胖了？肚子鼓了那么一点点……🤔"
-            state.eggs.size == 2 ->
-                "卧槽！你这肚子……两天没见咋大成这样了？！😱"
-            state.eggs.size == 3 ->
-                "兄弟！！！你怎么又胖了？！去看医生吧求你了！！🙏"
-            state.eggs.size == 4 ->
-                "（推开门后退三步）……你谁？？？？😨"
-            state.eggs.size == 5 && !hasProsthetics ->
-                "OMG！你已经完全变了一个人了！这是暴饮暴食？？🤯"
-            hasProsthetics && eggCount >= 5 -> {
-                val parts = mutableListOf<String>()
-                if (hasProsthetics) parts.addAll(listOf("肚子", "手臂", "大腿", "双下巴"))
-                "（沉默十秒）……兄弟，你这是……全身都胖了啊！连下巴都两层了！💀"
-            }
-            else -> "……我感觉你在耍我，但我说不上来。😅"
+        // 构建完整消息
+        val fullMessage = buildString {
+            appendLine(event.dialogue)
+            appendLine()
+            append("😅 你说：\"${event.yourLine}\"")
         }
 
-        val record = VisitRecord(newVisitCount, eggCount, message)
+        val narrationMsg = event.narration
 
         state = state.copy(
-            visitCount = newVisitCount,
-            friendMessage = message,
+            storyStage = newStage,
+            friendMessage = fullMessage,
+            friendSubMessage = narrationMsg,
             isFriendHere = true,
-            visitHistory = state.visitHistory + record,
-            gameLog = state.gameLog + "\uD83D\uDC64 朋友第${newVisitCount}次来访：$message"
+            showActTitle = true,
+            currentActTitle = event.title,
+            visitHistory = state.visitHistory + VisitRecord(newStage, eggCount, event.title),
+            gameLog = state.gameLog + """
+📺━━━ ${event.title} ━━━
+👤 兄弟：${event.dialogue}
+😅 你：${event.yourLine}
+📖 $narrationMsg
+                """.trimIndent()
         )
 
-        // 朋友对话结束后自动关闭
+        // 自动关闭
         viewModelScope.launch {
-            delay(3000)
+            delay(4000)
             state = state.copy(
                 isFriendHere = false,
-                friendMessage = "点击「朋友来访」看看反应！"
+                showActTitle = false,
+                currentActTitle = "",
+                friendMessage = "点击「朋友来访」继续追剧！第${newStage + 1}集即将开播📺",
+                friendSubMessage = ""
             )
             checkMomEvent()
         }
@@ -446,6 +510,34 @@ fun EggAgentGame() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // ===== 剧情标题横幅 =====
+        if (state.showActTitle) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+            ) {
+                Row(
+                    modifier = Modifier.padding(8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📺",
+                        fontSize = 20.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = state.currentActTitle,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE65100)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         // ===== 朋友对话框 =====
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -455,25 +547,34 @@ fun EggAgentGame() {
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (state.isFriendHere) "\uD83D\uDC64" else "\uD83D\uDC4B",
-                    fontSize = 32.sp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = if (state.isFriendHere) "兄弟说：" else "等待来访...",
-                        fontSize = 12.sp,
-                        color = Color(0xFF757575)
+                        text = if (state.isFriendHere) "\uD83D\uDC64" else "\uD83D\uDC4B",
+                        fontSize = 32.sp
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (state.isFriendHere) "兄弟说：" else "等待来访...",
+                            fontSize = 12.sp,
+                            color = Color(0xFF757575)
+                        )
+                        Text(
+                            text = state.friendMessage,
+                            fontSize = 14.sp,
+                            color = Color(0xFF212121)
+                        )
+                    }
+                }
+                // 旁白（来访结束后显示）
+                if (!state.isFriendHere && state.friendSubMessage.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = state.friendMessage,
-                        fontSize = 15.sp,
-                        color = Color(0xFF212121)
+                        text = "📖 ${state.friendSubMessage}",
+                        fontSize = 12.sp,
+                        color = Color(0xFF8D6E63),
+                        modifier = Modifier.padding(start = 40.dp)
                     )
                 }
             }
@@ -568,7 +669,7 @@ fun EggAgentGame() {
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.6f))
                 ) {
                     Text(
-                        text = "第${record.visitNumber}次（${record.eggCount}蛋）：${record.message}",
+                        text = "第${record.visitNumber}集：${record.message}",
                         fontSize = 13.sp,
                         color = Color(0xFF5D4037),
                         modifier = Modifier.padding(8.dp)
