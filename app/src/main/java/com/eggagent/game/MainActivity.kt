@@ -3,6 +3,7 @@ package com.eggagent.game
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.viewModelScope
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -29,7 +30,7 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 // ========== 蛋蛋类型 ==========
-enum class EggType(val emoji: String, val name: String, val color: Color, val size: Int) {
+enum class EggType(val emoji: String, val eggName: String, val color: Color, val size: Int) {
     BLACK("\uD83E\uDD5A", "黑蛋", Color(0xFF2C2C2C), 1),
     YELLOW("\uD83E\uDD5A", "黄蛋", Color(0xFFFFD54F), 2),
     RED("\uD83E\uDD5A", "红蛋", Color(0xFFE53935), 3),
@@ -78,7 +79,7 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
             // 塞入新蛋
             val newEgg = EggType.getByIndex(currentEggs.size)
             currentEggs.add(newEgg)
-            addLog("\uD83E\uDD5A 你偷偷塞了一个 ${newEgg.name}！肚子${"😰".repeat(newEgg.size)}")
+            addLog("\uD83E\uDD5A 你偷偷塞了一个 ${newEgg.eggName}！肚子${"😰".repeat(newEgg.size)}")
 
             state = state.copy(
                 eggs = currentEggs,
@@ -112,7 +113,7 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
 
         if (currentEggs.isNotEmpty()) {
             val removed = currentEggs.removeLast()
-            addLog("\uD83C\uDFC3 你跳了半小时绳！${removed.name}掉了出来！肚子小了一圈～")
+            addLog("\uD83C\uDFC3 你跳了半小时绳！${removed.eggName}掉了出来！肚子小了一圈～")
 
             state = state.copy(eggs = currentEggs)
         } else if (state.hasProsthetics) {
@@ -186,7 +187,7 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
                     gameLog = state.gameLog + "\uD83D\uDC69\u200D\uD83C\uDF73 老妈：『冰箱里怎么这么多蛋？煮了当晚饭！』"
                 )
                 delay(2000)
-                val cookedEggs = state.eggs.map { it.name }
+                val cookedEggs = state.eggs.map { name -> name.eggName }
                 state = state.copy(
                     eggs = emptyList(),
                     hasProsthetics = false,
