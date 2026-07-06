@@ -44,27 +44,17 @@ enum class EggType(val emoji: String, val eggName: String, val color: Color, val
 // ========== 访问记录 ==========
 data class VisitRecord(val visitNumber: Int, val eggCount: Int, val message: String)
 
-// ========== 连续剧情事件 ==========
-data class StoryEvent(
-    val act: Int,           // 第几幕
-    val title: String,      // 幕标题
-    val dialogue: String,   // 兄弟台词
-    val yourLine: String,   // 你的回应
-    val narration: String,  // 旁白描述
-    val minEggs: Int = 0,   // 建议最少蛋数
-    val needsProsthetics: Boolean = false  // 是否需要假体
-)
-
 // ========== 游戏状态 ==========
 data class GameState(
     val eggs: List<EggType> = emptyList(),
     val hasProsthetics: Boolean = false,      // 是否解锁假体
-    val storyStage: Int = 0,                   // 当前剧情进度（0-6）
-    val friendMessage: String = "点击「朋友来访」继续追剧！",
+    val lastVisitEggCount: Int = 0,            // 上次来访时蛋数（用于对比变化）
+    val totalVisits: Int = 0,                  // 总来访次数
+    val friendMessage: String = "点击「朋友来访」看看他的反应！",
     val friendSubMessage: String = "",
     val friendName: String = "\uD83D\uDC64 兄弟",
     val visitHistory: List<VisitRecord> = emptyList(),
-    val gameLog: List<String> = listOf("🎮 蛋蛋特工启动！📺 兄弟连续剧即将开播……"),
+    val gameLog: List<String> = listOf("🎮 蛋蛋特工启动！"),
     val isMomCooking: Boolean = false,         // 被老妈煮蛋了？
     val isFriendHere: Boolean = false,         // 朋友正在对话？
     val showEggAnimation: Boolean = false,
@@ -78,9 +68,6 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
 
     var state by mutableStateOf(GameState())
         private set
-
-    // 所有蛋蛋排列组合
-    private val allEggTypes = EggType.entries.toList()
 
     // ===== 塞蛋 =====
     fun addEgg() {
@@ -137,92 +124,116 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
         }
     }
 
-    // ========== 连续剧情 ==========
-    private val storyEvents = listOf(
-        StoryEvent(
-            act = 1, title = "🥚 第一幕 · 黑蛋首秀",
-            dialogue = "嗯？兄弟，你咋胖了这么多？肚子鼓起来好大一块！",
-            yourLine = "唉，最近吃太多了，控制不住嘴……",
-            narration = "朋友信了。他脸上全是关心。你回家把蛋掏出来，笑到打滚。",
-            minEggs = 1
-        ),
-        StoryEvent(
-            act = 2, title = "🏃 第二幕 · 瘦了",
-            dialogue = "卧槽！你瘦了？！两天不见怎么瘦这么多？！牛逼啊你！",
-            yourLine = "跳了两天绳，天赋异禀。",
-            narration = "朋友信了。他比你还高兴。你回家，把换小的蛋掏出来，笑了十分钟。",
-            minEggs = 0
-        ),
-        StoryEvent(
-            act = 3, title = "😰 第三幕 · 反弹",
-            dialogue = "……你怎么又胖了？？反弹能弹这么多的吗？！",
-            yourLine = "唉，断了几天没跳，易胖体质，没办法……",
-            narration = "朋友信了。他以为你真的很苦恼。你回家，把蛋掏出来，又笑了半天。",
-            minEggs = 2
-        ),
-        StoryEvent(
-            act = 4, title = "😱 第四幕 · 持续膨胀",
-            dialogue = "你怎么又胖了？！兄弟，你去看看医生吧！这不对啊！！",
-            yourLine = "看了，医生说是代谢问题……没事，我继续跳绳。",
-            narration = "朋友信了。他开始为你担心了。你回家，把蛋掏出来，笑得肚子疼。",
-            minEggs = 3
-        ),
-        StoryEvent(
-            act = 5, title = "👽 第五幕 · 全面升级",
-            dialogue = "（推开门，退了一步）……你谁？？？？",
-            yourLine = "我啊！",
-            narration = "朋友上下打量了你足足十秒，陷入了自我怀疑……",
-            minEggs = 4
-        ),
-        StoryEvent(
-            act = 6, title = "🤖 第六幕 · 最终形态",
-            dialogue = "（沉默了十秒）……兄弟，你是吃了化肥吗？你已经……不像人了。",
-            yourLine = "最近压力大，暴饮暴食……",
-            narration = "朋友开始怀疑人生。你回家，五颗蛋加全套假体全部掏出来，在床上笑到抽筋。",
-            minEggs = 5,
-            needsProsthetics = true
-        ),
-        StoryEvent(
-            act = 7, title = "♾️ 第七幕 · 蛋蛋轮回",
-            dialogue = "（麻木地看了你一眼）哦，又胖了。随你吧……我去买口锅。",
-            yourLine = "买锅干啥？",
-            narration = "朋友：『给你妈做饭用，反正你迟早要露馅。』",
-            minEggs = 0
-        )
-    )
-
-    // ===== 朋友来访（连续剧模式）=====
+    // ===== 朋友来访（智能连续剧情）=====
     fun friendVisit() {
         if (state.isMomCooking) return
         if (state.isFriendHere) return
 
-        val currentStage = state.storyStage
-        val event = storyEvents[currentStage % storyEvents.size]
         val eggCount = state.eggs.size
-        val newStage = currentStage + 1
+        val lastCount = state.lastVisitEggCount
+        val diff = eggCount - lastCount
+        val hasProsthetics = state.hasProsthetics
+        val newTotal = state.totalVisits + 1
 
-        // 构建完整消息
-        val fullMessage = buildString {
-            appendLine(event.dialogue)
-            appendLine()
-            append("😅 你说：\"${event.yourLine}\"")
+        // ---- 根据变化生成剧情 ----
+        val (title, dialogue, yourLine, narration) = when {
+            // 第一次来访
+            newTotal == 1 -> listOf(
+                "🥚 第一幕 · 初次见面",
+                "嗯？兄弟，你肚子……是不是比以前大了？",
+                "唉，最近吃太多了……",
+                "朋友信了，关心地拍了拍你的肩膀。你回家后笑出了声。"
+            )
+            // 蛋变多了 → 胖了
+            diff > 0 && eggCount <= 2 -> listOf(
+                "😰 胖了！",
+                "你怎么又胖了？！这才几天没见啊！",
+                "呃……最近压力大，暴饮暴食……",
+                "朋友担忧地叹了口气。你拼命忍住笑。"
+            )
+            diff > 0 && eggCount <= 4 -> listOf(
+                "😱 持续膨胀！",
+                "（瞪大眼睛）兄弟，你这肚子……也太夸张了吧？！",
+                "我……我喝凉水都胖……",
+                "朋友开始怀疑人生了。你回家笑得肚子疼。"
+            )
+            diff > 0 && eggCount >= 5 -> listOf(
+                "👽 大变活人！",
+                "（后退三步）……你谁？？？？这才几天啊！",
+                "我啊！真的是我！",
+                "朋友陷入了自我怀疑。你把蛋掏出来，笑到抽筋。"
+            )
+            // 蛋变少了 → 瘦了
+            diff < 0 && eggCount <= 1 -> listOf(
+                "🏃 瘦了！",
+                "卧槽！！你瘦了？！怎么做到的？！牛逼啊！",
+                "跳了两天绳，天赋异禀。",
+                "朋友比你还高兴。你回家把换小的蛋掏出来，笑了十分钟。"
+            )
+            diff < 0 && eggCount <= 3 -> listOf(
+                "💪 又瘦了！",
+                "可以啊兄弟！你这身材恢复得也太快了吧！传授一下！",
+                "多运动，少吃饭，很简单。",
+                "朋友一脸崇拜。你心里笑疯了。"
+            )
+            diff < 0 && eggCount >= 4 -> listOf(
+                "🤔 瘦了？但还是很胖……",
+                "嗯……你是瘦了点，但……你这肚子还是不对啊！",
+                "慢慢来，减太快伤身体。",
+                "朋友将信将疑。你赶紧转移话题。"
+            )
+            // 蛋数不变，但蛋数本身有变化空间
+            eggCount == 0 -> listOf(
+                "✨ 保持完美",
+                "可以啊，身材保持得不错！继续保持！",
+                "那必须的，自律给我自由。",
+                "朋友满意地点了点头。你默默摸了摸平坦的小腹。"
+            )
+            eggCount in 1..2 -> listOf(
+                "🤷 没变化",
+                "嗯……你是不是还是老样子？好像没胖没瘦？",
+                "是吧，我最近挺稳定的。",
+                "朋友看不出什么异常。你松了口气。"
+            )
+            eggCount in 3..4 -> listOf(
+                "🤨 维持现状",
+                "你……还是这么胖。没救了。",
+                "我在努力了！",
+                "朋友已经懒得说你了。"
+            )
+            else -> listOf(
+                "♾️ 蛋蛋轮回",
+                "（表情麻木）哦，来了啊。又胖了是吧？习惯了。",
+                "……",
+                "朋友已经放弃治疗了。你去买口锅，准备自己煮蛋吃。"
+            )
         }
 
-        val narrationMsg = event.narration
+        // 如果是假体全开，特殊台词
+        val finalDialogue = if (hasProsthetics && eggCount >= 5) {
+            "（推开门，愣住）你……这是什么造型？？全身都胖了？！连下巴都两层了！！💀"
+        } else dialogue
+
+        val fullMessage = buildString {
+            appendLine(finalDialogue)
+            appendLine()
+            append("😅 你说：\"${yourLine}\"")
+        }
 
         state = state.copy(
-            storyStage = newStage,
+            lastVisitEggCount = eggCount,
+            totalVisits = newTotal,
             friendMessage = fullMessage,
-            friendSubMessage = narrationMsg,
+            friendSubMessage = narration,
             isFriendHere = true,
             showActTitle = true,
-            currentActTitle = event.title,
-            visitHistory = state.visitHistory + VisitRecord(newStage, eggCount, event.title),
+            currentActTitle = title,
+            visitHistory = state.visitHistory + VisitRecord(newTotal, eggCount, title),
             gameLog = state.gameLog + """
-📺━━━ ${event.title} ━━━
-👤 兄弟：${event.dialogue}
-😅 你：${event.yourLine}
-📖 $narrationMsg
+📺━━━ $title ━━━
+👤 兄弟：$finalDialogue
+😅 你：$yourLine
+📖 $narration
                 """.trimIndent()
         )
 
@@ -233,7 +244,7 @@ class EggGameViewModel : androidx.lifecycle.ViewModel() {
                 isFriendHere = false,
                 showActTitle = false,
                 currentActTitle = "",
-                friendMessage = "点击「朋友来访」继续追剧！第${newStage + 1}集即将开播📺",
+                friendMessage = "点击「朋友来访」看看他的反应！",
                 friendSubMessage = ""
             )
             checkMomEvent()
